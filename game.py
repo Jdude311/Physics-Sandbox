@@ -40,8 +40,8 @@ class ObjectHandler:
 	def __init__(self):
 		pass
 
-	def createParticle(self, mass, position, velocity, color):
-		objects.append(Particle(mass, position, velocity, color, True))
+	def createParticle(self, mass, position, velocity, gravity, color):
+		objects.append(Particle(mass, position, velocity, gravity, color))
 
 class ObjectIdentifier:
 	nextFreeID = 0
@@ -53,7 +53,7 @@ class ObjectIdentifier:
 		return self.identifier
 
 class Particle:
-	def __init__(self, mass, position, velocity, color, gravity):
+	def __init__(self, mass, position, velocity, gravity, color):
 		self.mass = mass
 		self.gravity = gravity
 		self.position = np.array([float(position[0]), float(position[1])])
@@ -91,7 +91,7 @@ class Particle:
 				if not tuple((self.position + np.array([x,y])).round()) in collision_map.keys(): break
 				for colliding_object in collision_map[tuple((self.position + np.array([x,y])).round())]:
 					other = objects[colliding_object]
-					if (colliding_object != self.identifier and np.linalg.norm(other.getPosition() - self.getPosition()) < max(np.linalg.norm(self.velocity), np.linalg.norm(other.velocity))/(FRAMERATE)):
+					if (colliding_object != self.identifier): #and np.linalg.norm(other.getPosition() - self.getPosition()) < 100+max(np.linalg.norm(self.velocity), np.linalg.norm(other.velocity))/(FRAMERATE)):
 						for xx in [self.position[0]] + list(np.arange(self.position[0],self.position[0]+self.velocity[0]/FRAMERATE,1)):
 							for yy in [self.position[1]] + list(np.arange(self.position[1],self.position[1]+self.velocity[1]/FRAMERATE,1)):
 									collision_map[tuple((self.position + np.array([xx,yy])).round())].remove(self.identifier)
