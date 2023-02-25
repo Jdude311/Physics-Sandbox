@@ -4,12 +4,10 @@ from math import *
 collision_map = {}
 objects = []
 FRAMERATE = 60
-WIDTH = 800
-HEIGHT = 450
+WIDTH = 100
+HEIGHT = 50
 class Game:
-	def __init__(self, width, height):
-		WIDTH = width
-		HEIGHT = height
+	def __init__(self):
 		self.object_handler = ObjectHandler()
 
 	def initGraphics(self):
@@ -25,15 +23,15 @@ class Game:
 			clear_background(WHITE)
 
 			for obj in objects:
-				obj.updatePosition()
 				obj.updateCollisionMap()
 				obj.draw()
 
 			end_drawing()
 
+			for obj in objects: obj.updatePosition()
+
 			for obj in objects: obj.checkCollisions()
-
-
+			
 		close_window()
 
 class ObjectHandler:
@@ -63,7 +61,7 @@ class Particle:
 		self.color = color
 
 	def draw(self):
-		draw_circle_v(tuple(self.position.round()), 2, self.color)
+		draw_pixel_v(tuple(self.position.round()), self.color)
 
 	def setVelocity(self, velocity):
 		self.velocity = velocity
@@ -74,10 +72,27 @@ class Particle:
 	def updatePosition(self):
 		if self.gravity: self.velocity[1] += 9.81 / FRAMERATE
 		self.position += self.velocity / FRAMERATE
-		if self.position[0] > WIDTH or self.position[0] < 0: self.velocity[0] *= -1
-		if self.position[1] > HEIGHT or self.position[1] < 0: self.velocity[1] *= -1
+		if self.position[0] > WIDTH:
+			self.velocity[0] *= -1
+			self.position[0] = WIDTH
+		elif self.position[0] < 0:
+			self.velocity[0] *= -1
+			self.position[0] = 0
+			
+		if self.position[1] > HEIGHT:
+			self.velocity[1] *= -1
+			self.position[1] = HEIGHT
+		elif self.position[1] < 0:
+			self.velocity[1] *= -1
+			self.position[1] = 0
 
 	def updateCollisionMap(self):
+		# for position in [pos for pos = self.position in pos <= self.position+self.velocity/FRAMERATE).append(self.position):
+		# 	key = tuple(position).round()
+		# 	if not key in collision_map.keys():
+		# 		collision_map[key] = []
+		# 	collision_map[key].append(self.identifier)
+		
 		for x in [self.position[0]] + list(np.arange(self.position[0],self.position[0]+self.velocity[0]/FRAMERATE,1)):
 			for y in [self.position[1]] + list(np.arange(self.position[1],self.position[1]+self.velocity[1]/FRAMERATE,1)):
 				key = tuple((self.position + np.array([x,y])).round())
@@ -94,9 +109,9 @@ class Particle:
 					if (colliding_object != self.identifier): #and np.linalg.norm(other.getPosition() - self.getPosition()) < 100+max(np.linalg.norm(self.velocity), np.linalg.norm(other.velocity))/(FRAMERATE)):
 						for xx in [self.position[0]] + list(np.arange(self.position[0],self.position[0]+self.velocity[0]/FRAMERATE,1)):
 							for yy in [self.position[1]] + list(np.arange(self.position[1],self.position[1]+self.velocity[1]/FRAMERATE,1)):
-									collision_map[tuple((self.position + np.array([xx,yy])).round())].remove(self.identifier)
-						print(collision_map[tuple((self.position + np.array([xx,yy])).round())])
-						print("COLLISION!!!!!" + str(self.identifier))
+									if self.identifier in collision_map[tuple((self.position + np.array([xx,yy])).round())]: collision_map[tuple((self.position + np.array([xx,yy])).round())].remove(self.identifier)
+						# print(collision_map[tuple((self.position + np.array([xx,yy])).round())])
+						# print("COLLISION!!!!!" + str(self.identifier))
 						self.collide(other)
 						return
 
@@ -109,9 +124,9 @@ class Particle:
 		r1 = other.position  # other position
 		m0 = self.mass  # mass of self
 		m1 = other.mass  # mass of other
-		print(v0 - ((2 * m1)/(m0+m1)) * ((np.dot(v0-v1, r0-r1))/(np.linalg.norm(r0-r1)**2)) * (r0-r1))
+		# print(v0 - ((2 * m1)/(m0+m1)) * ((np.dot(v0-v1, r0-r1))/(np.linalg.norm(r0-r1)**2)) * (r0-r1))
 		self.setVelocity((v0 - ((2 * m1)/(m0+m1)) * ((np.dot(v0-v1, r0-r1))/(np.linalg.norm(r0-r1)**2)) * (r0-r1)))
-		print(v1 - ((2 * m0)/(m0+m1)) * ((np.dot(v0-v1, r0-r1))/(np.linalg.norm(r1-r0)**2)) * (r1-r0))
+		# print(v1 - ((2 * m0)/(m0+m1)) * ((np.dot(v0-v1, r0-r1))/(np.linalg.norm(r1-r0)**2)) * (r1-r0))
 		other.setVelocity((v1 - ((2 * m0)/(m0+m1)) * ((np.dot(v0-v1, r0-r1))/(np.linalg.norm(r1-r0)**2)) * (r1-r0)))
 """
 class Physics:
