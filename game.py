@@ -1,37 +1,53 @@
 from pyray import *
 import numpy as np
 from math import *
+import itertools
 collision_map = {}
 objects = []
-FRAMERATE = 60
-WIDTH = 100
-HEIGHT = 50
+FRAMERATE = 165
+WIDTH_PIXELS = 1000
+HEIGHT_PIXELS = 500
+# SCALE = 5 # pixels per meter
+# WIDTH_METERS = WIDTH_PIXELS / SCALE
+# HEIGHT_METERS = HEIGHT_PIXELS / SCALE
+WIDTH_METERS = 10
+SCALE = WIDTH_PIXELS / WIDTH_METERS # pixels per meter
+HEIGHT_METERS = HEIGHT_PIXELS / SCALE
+
+GRAVITY = 9.81
 class Game:
 	def __init__(self):
 		self.object_handler = ObjectHandler()
 
 	def initGraphics(self):
-		init_window(WIDTH, HEIGHT, "Game")
+		init_window(WIDTH_PIXELS, HEIGHT_PIXELS, "Game")
+		set_target_fps(FRAMERATE)
 
 	def mainLoop(self):
 		while not window_should_close():
+			FRAMERATE = get_fps()
+
 			# clear tilemap
 			collision_map.clear()
+
+			for obj in objects:
+				obj.updateCollisionMap()
+
+			for obj in objects:
+				obj.checkCollisions()
 
 			# Clear screen
 			begin_drawing()
 			clear_background(WHITE)
 
 			for obj in objects:
-				obj.updateCollisionMap()
 				obj.draw()
 
 			end_drawing()
 
+
 			for obj in objects: obj.updatePosition()
 
-			for obj in objects: obj.checkCollisions()
-			
 		close_window()
 
 class ObjectHandler:
@@ -53,6 +69,7 @@ class ObjectIdentifier:
 class Particle:
 	def __init__(self, mass, position, velocity, gravity, color):
 		self.mass = mass
+		self.radius = self.mass
 		self.gravity = gravity
 		self.position = np.array([float(position[0]), float(position[1])])
 		self.velocity = np.array([float(velocity[0]), float(velocity[1])])
@@ -61,7 +78,7 @@ class Particle:
 		self.color = color
 
 	def draw(self):
-		draw_pixel_v(tuple(self.position.round()), self.color)
+		draw_circle_v(tuple((self.position * SCALE).round() ), self.radius * SCALE, self.color)
 
 	def setVelocity(self, velocity):
 		self.velocity = velocity
@@ -70,18 +87,18 @@ class Particle:
 		return self.position
 
 	def updatePosition(self):
-		if self.gravity: self.velocity[1] += 9.81 / FRAMERATE
+		if self.gravity: self.velocity[1] += GRAVITY / FRAMERATE
 		self.position += self.velocity / FRAMERATE
-		if self.position[0] > WIDTH:
+		if self.position[0] > WIDTH_METERS:
 			self.velocity[0] *= -1
-			self.position[0] = WIDTH
+			self.position[0] = WIDTH_METERS
 		elif self.position[0] < 0:
 			self.velocity[0] *= -1
 			self.position[0] = 0
-			
-		if self.position[1] > HEIGHT:
+
+		if self.position[1] > HEIGHT_METERS:
 			self.velocity[1] *= -1
-			self.position[1] = HEIGHT
+			self.position[1] = HEIGHT_METERS
 		elif self.position[1] < 0:
 			self.velocity[1] *= -1
 			self.position[1] = 0
@@ -92,28 +109,76 @@ class Particle:
 		# 	if not key in collision_map.keys():
 		# 		collision_map[key] = []
 		# 	collision_map[key].append(self.identifier)
-		
-		for x in [self.position[0]] + list(np.arange(self.position[0],self.position[0]+self.velocity[0]/FRAMERATE,1)):
-			for y in [self.position[1]] + list(np.arange(self.position[1],self.position[1]+self.velocity[1]/FRAMERATE,1)):
-				key = tuple((self.position + np.array([x,y])).round())
-				if not key in collision_map.keys():
-					collision_map[key] = []
-				collision_map[key].append(self.identifier)
+
+		check_position = self.position.copy()
+		key = check_position.round()
+		increment = np.array((0,0) if np.linalg.norm(self.velocity/FRAMERATE) == 0 else self.velocity/np.linalg.norm(self.velocity/FRAMERATE))
+		while True:
+			key = tuple(check_position.round())
+			if not key in collision_map.keys():
+				collision_map[key] = []
+			collision_map[key].append(self.identifier)
+
+			# Increment and check if final position reached yet
+			check_position += increment
+			if (increment == (0,0)).all(): break
+			if np.sign(self.velocity[0]) * (check_position[0] - (self.position + (self.velocity/FRAMERATE))[0]) >= 0:
+				if np.sign(self.velocity[1]) * (check_position[1] - (self.position + (self.velocity/FRAMERATE))[1]) >= 0:
+					break
+
+	def removeFromCollisionMap(self):
+		check_position = self.position.copy()
+		key = tuple(check_position.round())
+		increment = np.array((0,0) if np.linalg.norm(self.velocity/FRAMERATE) == 0 else self.velocity/np.linalg.norm(self.velocity/FRAMERATE))
+		while True:
+			key = tuple(check_position.round())
+			if key in collision_map.keys() and self.identifier in collision_map[key]:
+				collision_map[key].remove(self.identifier)
+
+			# Increment and check if final position reached yet
+			check_position += increment
+			if (increment == (0,0)).all(): break
+			if np.sign(self.velocity[0]) * (check_position[0] - (self.position + (self.velocity/FRAMERATE))[0]) >= 0:
+				if np.sign(self.velocity[1]) * (check_position[1] - (self.position + (self.velocity/FRAMERATE))[1]) >= 0:
+					break
 
 	def checkCollisions(self):
-		for x in [self.position[0]] + list(np.arange(self.position[0],self.position[0]+self.velocity[0]/FRAMERATE,1)):
-			for y in [self.position[1]] + list(np.arange(self.position[1],self.position[1]+self.velocity[1]/FRAMERATE,1)):
-				if not tuple((self.position + np.array([x,y])).round()) in collision_map.keys(): break
-				for colliding_object in collision_map[tuple((self.position + np.array([x,y])).round())]:
+		self.removeFromCollisionMap()  # Other object will not need to check this one for collisions anymore
+		check_position = self.position.copy()
+		key = check_position.round()
+		increment = np.array((0,0) if np.linalg.norm(self.velocity/FRAMERATE) == 0 else self.velocity/np.linalg.norm(self.velocity/FRAMERATE))
+		while True:
+			key = tuple(check_position.round())
+			if key in collision_map.keys():
+				for colliding_object in set(collision_map[key]):
 					other = objects[colliding_object]
-					if (colliding_object != self.identifier): #and np.linalg.norm(other.getPosition() - self.getPosition()) < 100+max(np.linalg.norm(self.velocity), np.linalg.norm(other.velocity))/(FRAMERATE)):
-						for xx in [self.position[0]] + list(np.arange(self.position[0],self.position[0]+self.velocity[0]/FRAMERATE,1)):
-							for yy in [self.position[1]] + list(np.arange(self.position[1],self.position[1]+self.velocity[1]/FRAMERATE,1)):
-									if self.identifier in collision_map[tuple((self.position + np.array([xx,yy])).round())]: collision_map[tuple((self.position + np.array([xx,yy])).round())].remove(self.identifier)
-						# print(collision_map[tuple((self.position + np.array([xx,yy])).round())])
-						# print("COLLISION!!!!!" + str(self.identifier))
+					if other.identifier == self.identifier: continue
+					print("calling collide")
+					if np.linalg.norm(other.getPosition() - check_position) <= self.radius + other.radius:
 						self.collide(other)
-						return
+					print("collide called")
+					break
+				break
+
+			# Increment and check if final position reached yet
+			check_position += increment
+			if (increment == (0,0)).all(): break
+			if np.sign(self.velocity[0]) * (check_position[0] - (self.position + (self.velocity/FRAMERATE))[0]) >= 0:
+				if np.sign(self.velocity[1]) * (check_position[1] - (self.position + (self.velocity/FRAMERATE))[1]) >= 0:
+					break
+		# for x in [self.position[0]] + list(np.arange(self.position[0],self.position[0]+self.velocity[0]/FRAMERATE,1)):
+		# 	for y in [self.position[1]] + list(np.arange(self.position[1],self.position[1]+self.velocity[1]/FRAMERATE,1)):
+		# 		if not tuple((self.position + np.array([x,y])).round()) in collision_map.keys(): break
+		# 		for colliding_object in collision_map[tuple((self.position + np.array([x,y])).round())]:
+		# 			other = objects[colliding_object]
+		# 			if (colliding_object != self.identifier): #and np.linalg.norm(other.getPosition() - self.getPosition()) < 100+max(np.linalg.norm(self.velocity), np.linalg.norm(other.velocity))/(FRAMERATE)):
+		# 				for xx in [self.position[0]] + list(np.arange(self.position[0],self.position[0]+self.velocity[0]/FRAMERATE,1)):
+		# 					for yy in [self.position[1]] + list(np.arange(self.position[1],self.position[1]+self.velocity[1]/FRAMERATE,1)):
+		# 						if self.identifier in collision_map[tuple((self.position + np.array([xx,yy])).round())]: collision_map[tuple((self.position + np.array([xx,yy])).round())].remove(self.identifier)
+		# 				# print(collision_map[tuple((self.position + np.array([xx,yy])).round())])
+		# 				# print("COLLISION!!!!!" + str(self.identifier))
+		# 				self.collide(other)
+		# 				return
 
 	def collide(self, other):
 		v0 = self.velocity  # initial self velocity
